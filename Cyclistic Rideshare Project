@@ -1,0 +1,360 @@
+---
+title: "How Does a Bike-Share Navigate Speedy Success?"
+author: "Sergei Bogdanov"
+date: "August 24th 2023"
+output:
+  html_document: default
+  pdf_document: default
+subtitle: Case Study 1
+---
+
+```{r}
+# Install required packages
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+```{r}
+# Displays your working directory 
+getwd()
+```
+
+# STEP 1: COLLECT DATA
+
+```{r Upload Divvy Data Sets}
+#Upload Divvy Data Sets
+t202208 <- read_csv("202208-divvy-tripdata-edit.csv")
+t202209 <- read_csv("202209-divvy-tripdata-edit.csv")
+t202210 <- read_csv("202210-divvy-tripdata-edit.csv")
+t202211 <- read_csv("202211-divvy-tripdata-edit.csv")
+t202212 <- read_csv("202212-divvy-tripdata-edit.csv")
+t202301 <- read_csv("202301-divvy-tripdata-edit.csv")
+t202302 <- read_csv("202302-divvy-tripdata-edit.csv")
+t202303 <- read_csv("202303-divvy-tripdata-edit.csv")
+t202304 <- read_csv("202304-divvy-tripdata-edit.csv")
+t202305 <- read_csv("202305-divvy-tripdata-edit.csv")
+t202306 <- read_csv("202306-divvy-tripdata-edit.csv")
+t202307 <- read_csv("202307-divvy-tripdata-edit.csv")
+```
+# STEP 2: WRANGLE DATA AND COMBINE INTO A SINGLE FILE
+```{r Compare column names each of the files}
+# Compare column names each of the files
+colnames(t202208)
+colnames(t202209)
+colnames(t202210)
+colnames(t202211)
+colnames(t202212)
+colnames(t202301)
+colnames(t202302)
+colnames(t202303)
+colnames(t202304)
+colnames(t202305)
+colnames(t202306)
+colnames(t202307)
+```
+
+```{r}
+# Inspect the dataframes and look for incongruencies
+str(t202208)
+str(t202209)
+str(t202210)
+str(t202211)
+str(t202212)
+str(t202301)
+str(t202302)
+str(t202303)
+str(t202304)
+str(t202305)
+str(t202306)
+str(t202307)
+
+```
+
+```{r Convert ride_id and rideable_type to character so that they can stack correctly}
+# Convert ride_id and rideable_type to character so that they can stack correctly
+t202208 <-  mutate(t202208, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202209 <-  mutate(t202209, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202210 <-  mutate(t202210, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202211 <-  mutate(t202211, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202212 <-  mutate(t202212, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202301 <-  mutate(t202301, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202302 <-  mutate(t202302, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202303 <-  mutate(t202303, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202304 <-  mutate(t202304, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202305 <-  mutate(t202305, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202306 <-  mutate(t202306, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+t202307 <-  mutate(t202307, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+```
+
+```{r Stack individual monthly data frames into one big data frame}
+#Stack individual monthly data frames into one big data frame
+all_trips_12months <- bind_rows(t202208, t202209, t202210, t202211, t202212, t202301, t202302, t202302, t202303, t202304, t202305, t202306, t202307)
+```
+
+# STEP 3: CLEAN UP AND ADD DATA TO PREPARE FOR ANALYSIS
+
+```{r Inspect the new table that has been created}
+# Inspect the new table that has been created
+colnames(all_trips_12months)
+nrow(all_trips_12months)  
+dim(all_trips_12months)  
+head(all_trips_12months)  
+str(all_trips_12months)  
+summary(all_trips_12months)
+```
+
+```{r}
+# Convert character strings to POSIXct datetime format
+all_trips_12months$ended_at <- as.POSIXct(all_trips_12months$ended_at, format = "%m/%d/%y %H:%M")
+all_trips_12months$started_at <- as.POSIXct(all_trips_12months$started_at, format = "%m/%d/%y %H:%M")
+
+# Calculate ride length in seconds and store in a new column
+all_trips_12months$ride_length_sec <- as.numeric(difftime(all_trips_12months$ended_at, all_trips_12months$started_at, units = "secs"))
+```
+
+
+```{r Add columns that list the date, month, day, and year of each ride}
+#Add columns that list the date, month, day, and year of each ride
+all_trips_12months$date <- as.Date(all_trips_12months$started_at) #The default format is yyyy-mm-dd
+all_trips_12months$month <- format(as.Date(all_trips_12months$date), "%m")
+all_trips_12months$day <- format(as.Date(all_trips_12months$date), "%d")
+all_trips_12months$year <- format(as.Date(all_trips_12months$date), "%Y")
+all_trips_12months$day_of_week <- format(as.Date(all_trips_12months$date), "%A")
+```
+
+``` {r Extract the hour of the day from started_at}
+#Extract the hour of the day from started_at
+all_trips_12months$hour_of_day <- lubridate::hour(all_trips_12months$started_at)
+```
+
+```{r Remove "bad" data and remove rows with NA values in ride_length_sec}
+#Remove "bad" data and remove rows with NA values in ride_length_sec
+all_trips_12months_cleaned <- all_trips_12months[!(all_trips_12months$start_station_name == "HQ QR" | all_trips_12months$ride_length < 0), ]
+
+# Remove rows with NA values in ride_length_sec
+all_trips_12months_cleaned <- all_trips_12months_cleaned[!is.na(all_trips_12months_cleaned$ride_length_sec), ]
+
+```
+
+```{r Inspect the new table}
+#Inspect the new table
+colnames(all_trips_12months_cleaned)
+nrow(all_trips_12months_cleaned)  
+dim(all_trips_12months_cleaned)  
+head(all_trips_12months_cleaned)  
+str(all_trips_12months_cleaned)  
+summary(all_trips_12months_cleaned)
+```
+
+```{r Convert numeric month to month names }
+#Convert numeric month to month names 
+all_trips_12months_cleaned$month_name <- month.name[as.numeric(all_trips_12months_cleaned$month)]
+# Print the resulting dataframe
+print(all_trips_12months_cleaned)
+```
+
+# STEP 4: CONDUCT DESCRIPTIVE ANALYSIS
+
+```{r Descriptive analysis on ride_length}
+#Descriptive analysis on ride_length
+# Calculate descriptive statistics
+mean_ride_length <- mean(all_trips_12months_cleaned$ride_length_sec)
+median_ride_length <- median(all_trips_12months_cleaned$ride_length_sec)
+max_ride_length <- max(all_trips_12months_cleaned$ride_length_sec)
+min_ride_length <- min(all_trips_12months_cleaned$ride_length_sec)
+
+# Print the results
+cat("Mean Ride Length:", mean_ride_length, "\n")
+cat("Median Ride Length:", median_ride_length, "\n")
+cat("Max Ride Length:", max_ride_length, "\n")
+cat("Min Ride Length:", min_ride_length, "\n")
+```
+
+```{r Condense the four lines above to one line using summary() on the specific attribute}
+#Condense the four lines above to one line using summary() on the specific attribute
+summary(all_trips_12months_cleaned$ride_length_sec)
+```
+
+```{r #Compare members and casual users}
+#Compare members and casual users
+aggregate(all_trips_12months_cleaned$ride_length_sec ~ all_trips_12months_cleaned$member_casual, FUN = mean)
+aggregate(all_trips_12months_cleaned$ride_length_sec ~ all_trips_12months_cleaned$member_casual, FUN = median)
+aggregate(all_trips_12months_cleaned$ride_length_sec ~ all_trips_12months_cleaned$member_casual, FUN = max)
+aggregate(all_trips_12months_cleaned$ride_length_sec ~ all_trips_12months_cleaned$member_casual, FUN = min)
+```
+
+```{r See the average ride time by each day for members vs casual users}
+#See the average ride time by each day for members vs casual users
+aggregate(all_trips_12months_cleaned$ride_length_sec ~ all_trips_12months_cleaned$member_casual + all_trips_12months_cleaned$day_of_week, FUN = mean)
+```
+
+```{r Analyze ridership data by type and weekday}
+#Analyze ridership data by type and weekday
+all_trips_12months_cleaned %>%
+  group_by(member_casual, day_of_week) %>% #groups by usertype and weekday 
+  drop_na() %>% 
+  summarize(number_of_rides = n(), #calculates the number of rides and average duration 
+             average_duration = mean(ride_length_sec), #calculates the average duration
+            .groups = 'keep') %>%
+              
+  arrange(member_casual, day_of_week)		#sorts
+```
+
+```{r Visualize the number of rides by rider type}
+#Visualize the number of rides by rider type
+options(scipen=100)
+# Convert day_of_week to factor with ordered levels
+all_trips_12months_cleaned$day_of_week <- factor(
+  all_trips_12months_cleaned$day_of_week,
+  levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+)
+
+all_trips_12months_cleaned %>% 
+  group_by(member_casual, day_of_week) %>% 
+  drop_na() %>%
+  summarise(
+    number_of_rides = n(),
+    average_duration = mean(ride_length_sec),
+    .groups = 'keep'
+    ) %>% 
+  arrange(member_casual, day_of_week) %>% 
+  ggplot(aes(x = day_of_week, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")+
+labs(title = "Number Of Trips By Passenger Category By Day Of The Week",
+    x = "Day of week",
+    y = "Number of Rides",
+    fill = "User Type") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+  )
+```
+
+**Clear differences emerge in the usage patterns by day of week. This suggests opportunities to target marketing and promotions toward casual riders based on weekend or evening usage to potentially convert them to members.**
+Here are some key takeaways from analyzing rides by day of week for members versus casual riders:
+*Casual riders take significantly more rides on weekends - especially Saturdays - compared to members. Casual Saturday rides are nearly double the average weekday usage.
+*Membership usage remains relatively steady across days of the week, with a slight peak mid-week. This indicates members rely on Cyclistic for regular transportation throughout the week.
+*Casual usage drops dramatically during the work week compared to weekends, suggesting many casual riders use Cyclistic bikes for weekend leisure activities primarily.
+
+
+```{r Visualize the number of rides by rider type per month}
+#Visualize the number of rides by rider type per month
+options(scipen=100)
+
+#Convert month_name to factor with ordered levels
+all_trips_12months_cleaned$month_name <- factor(
+  all_trips_12months_cleaned$month_name,
+  levels = month.name
+)
+
+all_trips_12months_cleaned %>% 
+  group_by(member_casual, month_name) %>% 
+  drop_na() %>%
+  summarise(
+    number_of_rides = n(),
+    average_duration = mean(ride_length_sec),
+    .groups = 'keep'
+    ) %>% 
+  arrange(member_casual, month_name)  %>%
+  ggplot(aes(x = month_name, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")+
+  
+labs(title = "The Number Of Rides By Rider Type Per Month",
+    x = "Month",
+    y = "Number of Rides",
+    fill = "User Type") +
+  theme(axis.text.x = element_text(angle = 65, hjust = 1, vjust = 1))  # Rotate the x-axis labels
+```
+
+**Ride activity peaks in the summer months of June-August for both members and casual users, likely due to favorable weather conditions. Seasonality impacts casual users more than members. These findings can inform marketing tactics to convert casual riders to members.**
+
+Here are a few key observations from analyzing the provided data on Cyclistic bike rides by members and casual users:
+*Members take significantly more rides per month than casual riders. The average number of rides per month for members is around 25,000, while casual riders average around 15,000 rides per month.
+*Casual ridership drops dramatically in the winter months, while member usage is more consistent across months. The number of casual rides falls from 250k in peak summer months down to around 30k in December.
+
+
+```{r Create a visualization for average duration}
+#Create a visualization for average duration
+all_trips_12months_cleaned %>% 
+  group_by(member_casual, day_of_week) %>% 
+  drop_na() %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length_sec/60), #duration in minutes
+            .groups = 'keep') %>% 
+  arrange(member_casual, day_of_week) %>% 
+  ggplot(aes(x = day_of_week, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")+
+labs(title = "Cyclistic Ride Average Duration",
+    x = "Day of Week",
+    y = "Average Duration Minutes",
+    fill = "User Type")
+```
+
+**The key takeaway is the clear difference in duration between members and casual users, especially on weekends. This further indicates members rely on Cyclistic for transportation, while casual users are out for longer weekend excursions. Targeting marketing based on the leisure-style usage could help convert those riders to members.**
+
+Here are some observations from the additional analysis of average ride duration by day of week:
+*Casual riders take longer rides than members on every day of the week. The average casual ride is 20-25 minutes, while members average 11-13 minutes.
+*For casual riders, the longest average rides are on Sundays and Saturdays. The gap is largest on Sundays when casual rides average over 15 minutes longer.
+*Members have very consistent average ride durations each day, ranging only between 11-12 minutes. This stable pattern reflects regular transportation use.
+*The biggest differences in duration between ridership types is on the weekends. On Sundays the average casual ride is nearly twice as long as the average member ride.
+*The shortest average rides for casual users are on Tuesday-Thursday. This midweek period likely reflects commuting usage more than weekend leisure trips.
+
+```{r Create a visualization for starting location}
+#Create a visualization for starting location
+ggplot(all_trips_12months_cleaned, aes(x = start_lng, y = start_lat, color = member_casual)) +
+  geom_point() +
+  scale_color_manual(values = c("casual" = "red", "member" = "blue")) +
+  labs(title = "Cyclistic Ride Starting Location",
+    x = "Longitude",
+    y = "Latitude",
+    color = "Type of Rider")+
+  theme_minimal()
+```
+
+**Some geographic differences emerge between members and casual users related to commuting versus recreational/tourist riding. But this visualization reveals promising high-density start areas to target marketing efforts.**
+Here are a few observations from analyzing the visualization of Cyclistic ride starting locations:
+*The concentration of points in downtown Chicago indicates most rides start in the urban core, as expected.
+*Casual rider start locations (red) appear more dispersed across the map, while member start points (blue) are tightly clustered in the Loop area.
+*There is a high density of member ride starts along the lakefront, likely for recreational riding. Casual start points also dotted along the beaches.
+*A cluster of casual rider starts is visible near major museums/attractions like the Art Institute, Planetarium, and Museum of Science and Industry. Targeting tourists here could convert them.
+*The University of Chicago area has more member usage, suggesting commuter transportation for students/faculty.
+*There are very few starts in outlying residential areas, indicating not much ridership outside downtown for either user type.
+
+
+```{r Create the histogram or density plots}
+ggplot(all_trips_12months_cleaned, aes(x = hour_of_day, fill = member_casual)) +
+  geom_histogram(binwidth = 2, position = "identity", alpha = 0.7) +
+  labs(
+    title = "Ride Usage by Time of Day",
+    x = "Hour of Day",
+    y = "Number of Rides",
+    fill = "User Type"
+  ) +
+  facet_wrap(~ member_casual, ncol = 1) +  # Separate plots for each user type
+  theme_minimal() +
+  scale_x_continuous(breaks = 0:23)
+
+```
+
+**Clear differences emerge in the hourly usage patterns of members versus casuals related to commuting versus leisure trips. Targeting campaigns to casual riders in the afternoons and weekends could help convert them to members based on these usage patterns.**
+
+Here are some observations from analyzing the ride usage by time of day visualization:
+*Casual riders' usage peaks in the mid-afternoon, around 3-6pm, while member usage peaks during morning and evening commute times around 8am and 5-6pm.
+*Casual riders have a more even distribution of usage throughout the daytime hours from 9am-7pm. This matches expected leisure/sightseeing usage patterns.
+*Member usage drops off sharply in the late morning and mid-afternoon between commute peaks. Their usage follows a classic commuting pattern.
+*Weekend days likely have different usage patterns, with more casual ridership during daytime hours. Analysis by weekday would provide more insight.
+*The evening member peak seems larger than the morning peak. Afternoon-evening commutes may be more common than morning.
+*Overnight usage is minimal for both user types, unsurprisingly. Casuals have slightly higher late night usage.
+
