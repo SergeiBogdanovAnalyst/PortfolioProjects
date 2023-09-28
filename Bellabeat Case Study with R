@@ -1,0 +1,254 @@
+---
+title: "Bellabeat Case Study with R"
+author: "Sergei Bogdanov"
+date: "2023-09-13"
+output: html_document
+editor_options: 
+chunk_output_type: inline
+---
+
+# About a company
+Bellabeat is a health tech company that specializes in creating smart wellness products and technologies designed for women. The company was founded by Urska Srsen and Sandro Mur in 2013 and is headquartered in San Francisco, California. Bellabeat's mission is to empower women to take control of their health and well-being through innovative and user-friendly technology.
+
+# Questions for the analysis 
+
+* What trends or relationships can we find in the data?
+* How will these insights help answer the business questions and help with marketing strategy?
+
+# Business Task
+Analyze smart device usage data and gain insights that can inform Bellabeat's marketing strategy for one of its products with the goal of improving product alignment with consumer preferences and increasing market competitiveness.
+
+```{r}
+# Loading packages
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(tidyr) 
+library(readr)
+```
+
+```{r Setup Chunk, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/sergeibogdanov/Downloads/Data Analyst/Google Case Study 1/Case 2 Bellabeat")
+```
+## Importing datasets
+For this project, I will use FitBit Fitness Tracker Data
+```{r Importing datasets}
+activity <- read.csv("dailyActivity_merged.csv")
+calories <- read.csv("hourlyCalories_merged.csv")
+intensities <- read.csv("hourlyIntensities_merged.csv")
+sleep <- read.csv("sleepDay_merged.csv")
+weight <- read.csv("weightLogInfo_merged.csv")
+
+```
+
+```{r}
+head(intensities)
+str(intensities)
+```
+
+## Fixing formatting
+
+```{r Fixing formatting}
+library(dplyr)
+# intensities
+intensities$ActivityHour=as.POSIXct(intensities$ActivityHour, format="%m/%d/%Y %H:%M", tz=Sys.timezone())
+intensities$time <- format(intensities$ActivityHour, format = "%H:%M")
+intensities$date <- format(intensities$ActivityHour, format = "%m/%d/%y")
+
+# calories
+calories$ActivityHour=as.POSIXct(calories$ActivityHour, format="%m/%d/%Y %H:%M", tz=Sys.timezone())
+calories$time <- format(calories$ActivityHour, format = "%H:%M")
+calories$date <- format(calories$ActivityHour, format = "%m/%d/%y")
+
+# activity
+activity$ActivityDate=as.POSIXct(activity$ActivityDate, format="%m/%d/%Y", tz=Sys.timezone())
+activity$date <- format(activity$ActivityDate, format = "%m/%d/%y")
+
+# sleep
+# Convert SleepDay to POSIXct
+sleep$SleepDay = as.POSIXct(sleep$SleepDay, format="%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())
+sleep$date <- format(sleep$SleepDay, format = "%m/%d/%y")
+str(sleep)
+```
+This code chunk is standardizing the date and time formats in various dataframes to ensure consistency and facilitate further analysis. It separates date and time components, which can be useful for time-series analysis or other types of data exploration.
+
+## Exploring and summarizing data
+```{r Exploring and summarizing data}
+# activity
+activity %>% 
+  select(TotalSteps,
+         TotalDistance,
+         SedentaryMinutes,
+         Calories) %>% 
+  summary()
+# active minutes per category
+activity %>% 
+  select(VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes) %>% 
+  summary()
+# calories
+calories %>% 
+  select(Calories) %>% 
+  summary()
+# sleep
+sleep %>% 
+  select(TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>% 
+  summary()
+# weight
+weight %>% 
+  select(WeightKg, BMI) %>% 
+  summary()
+```
+
+#### There are several interesting observations and potential insights that can be derived:
+
+-   People in this dataset are getting an average of about 419 minutes of sleep per night, which is roughly 7 hours. That's not too shabby. But it's interesting to note that some folks are getting up to 796 minutes, which is more than 13 hours!
+-   On average, they're clocking in around 7,600 steps per day, which is like taking a mini hike every day. And some folks are taking more than 36,000 steps! That's like walking a marathon on a regular day.
+-   People are burning an average of 2,304 calories per day. That's like enjoying a big, satisfying meal without worrying too much about the calories. And some are burning up to 4,900 calories -- that's quite the workout!
+
+## Merging data
+```{r}
+merged_data <- merge(sleep, activity, by=c('Id','date'))
+head(merged_data)
+```
+This code is taking the 'sleep' and 'activity' dataframes, merging them based on the 'Id' and 'date' columns, and storing the merged data in a new dataframe called merged_data. The resulting merged_data dataframe will contain combined information from both 'sleep' and 'activity' data for rows with matching 'Id' and 'date' values.
+
+# Analyze phase
+We aim to identify user segments based on activity levels using FitBit data. Without demographic information, we will classify users based on their daily step counts. The categorization will include:
+
+* Sedentary - Less than 5000 steps a day.
+* Lightly active - Between 5000 and 7499 steps a day.
+* Fairly active - Between 7500 and 9999 steps a day.
+* Very active - More than 10000 steps a day.
+
+To begin, we will compute the average daily step count for each user.
+
+```{r}
+daily_activity_sleep <- merge(activity, sleep, by=c("Id", "date"))
+glimpse(daily_activity_sleep)
+```
+
+```{r}
+daily_average <- daily_activity_sleep %>%
+  group_by(Id) %>%
+  summarise (mean_daily_steps = mean(TotalSteps), mean_daily_calories = mean(Calories), mean_daily_sleep = mean(TotalMinutesAsleep))
+
+head(daily_average)
+```
+
+We will now classify our users by the daily average steps.
+
+```{r}
+user_type <- daily_average %>%
+  mutate(user_type = case_when(
+    mean_daily_steps < 5000 ~ "Sedentary",
+    mean_daily_steps >= 5000 & mean_daily_steps < 7499 ~ "Lightly active", 
+    mean_daily_steps >= 7500 & mean_daily_steps < 9999 ~ "Fairly active", 
+    mean_daily_steps >= 10000 ~ "Very active"
+  ))
+
+head(user_type)
+```
+
+Now that we have a new column with the user type we will create a data frame with the percentage of each user type to better visualize them on a graph.
+
+```{r}
+user_type_percent <- user_type %>%
+  group_by(user_type) %>%
+  summarise(total = n()) %>%
+  mutate(totals = sum(total)) %>%
+  group_by(user_type) %>%
+  summarise(total_percent = total / totals) %>%
+  mutate(labels = scales::percent(total_percent))
+
+user_type_percent$user_type <- factor(user_type_percent$user_type , levels = c("Very active", "Fairly active", "Lightly active", "Sedentary"))
+
+
+head(user_type_percent)
+```
+
+Below we can see that users are fairly distributed by their activity considering the daily amount of steps. We can determine that based on users activity all kind of users wear smart-devices.
+
+```{r}
+user_type_percent %>%
+  ggplot(aes(x="",y=total_percent, fill=user_type)) +
+  geom_bar(stat = "identity", width = 1)+
+  coord_polar("y", start=0)+
+  theme_minimal()+
+  theme(axis.title.x= element_blank(),
+        axis.title.y = element_blank(),
+        panel.border = element_blank(), 
+        panel.grid = element_blank(), 
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=14, face = "bold")) +
+  scale_fill_manual(values = c("#85e085","#e6e600", "#ffd480", "#ff8080")) +
+  geom_text(aes(label = labels),
+            position = position_stack(vjust = 0.5))+
+  labs(title="User type distribution", fill = "User Type")
+```
+
+These categories offer insights into the distribution of user activity levels within the dataset, with fairly active users being the largest group, followed by lightly active, sedentary, and very active users.
+
+#### We will now determine if there is any correlation between different variables:
+Creating a scatter plot using the ggplot2 package to visualize the relationship between the 'TotalSteps' and 'Calories' variables.
+```{r}
+ggplot(data=activity, aes(x=TotalSteps, y=Calories)) + 
+  geom_point() + 
+  geom_smooth(size =.8) + 
+  labs(title="Total Steps vs. Calories", x= "Daily Steps", y="Calories") +
+  theme_minimal()
+```
+
+As one might expect, there's a correlation between daily steps and calories. The more steps taken, the more calories one may burn.
+
+Creating a scatter plot using the ggplot2 package to visualize the relationship between the 'Total Minutes Asleep' and 'Total Time in Bed' variables.
+```{r}
+ggplot(data = sleep, aes(x = TotalMinutesAsleep, y = TotalTimeInBed)) + 
+  geom_point(color = "blue", alpha = 0.5) +  # Added color and transparency
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Added a regression line
+  labs(
+    title = "Total Minutes Asleep vs. Total Time in Bed",
+    x = "Minutes Asleep",  # Added x-axis label
+    y = "Time in Bed"      # Added y-axis label
+  ) +
+  theme_minimal() +  # Improved the plot theme for clarity
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())  # Removed grid lines
+
+```
+
+* There appears to be a linear relationship between Total Minutes Asleep and Total Time in Bed. 
+* If Bellabeat users aim to enhance their sleep quality, we could contemplate sending notifications encouraging them to establish a consistent bedtime routine.
+
+```{r}
+int_new <- intensities %>%
+  group_by(time) %>%
+  drop_na() %>%
+  summarise(mean_total_int = mean(TotalIntensity))
+
+ggplot(data=int_new, aes(x=time, y=mean_total_int)) + 
+  geom_histogram(stat = "identity", fill='darkgreen') +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title="Average Total Intensity vs. Time", x= "Time", y="Intensities")
+
+```
+
+* After analyzing the hourly Total Intensity data, it's evident that individuals tend to be more active from 5 am to 10 pm. 
+* The peak of physical activity occurs between 5 pm and 7 pm, possibly suggesting that people engage in exercise or outdoor activities after their workday. 
+* This timeframe presents an opportunity for Bellabeat to leverage its app by sending reminders and motivation to users, encouraging them to go for a run or walk during this active period.
+
+#### Target Audience:
+
+Our target audience comprises individuals, particularly women, who work full-time jobs, spending substantial hours at a desk or in meetings, indicating high sedentary behavior. Additionally, they engage in light physical activities to maintain their health. It's important to note that since we lack gender-specific data, we assume a balanced representation of all genders within the dataset.
+
+#### Key Message for Bellabeat's Online Campaign:
+
+The Bellabeat app isn't just another fitness application; it's your supportive companion, empowering individuals to strike a harmonious balance between their personal and professional lives while fostering healthy habits and routines. Through daily app recommendations, Bellabeat educates and motivates users on this journey.
+
+#### Ideas for the Bellabeat App:
+
+* Encourage Activity: The daily average step count of 7638 is slightly below the threshold for significant health benefits, as suggested by CDC research. Bellabeat can motivate users to aim for at least 8,000 steps per day by explaining the substantial health advantages associated with this target.
+* Calorie Control: For users aiming to manage their weight, the app can provide ideas for low-calorie lunch and dinner options, aiding in effective calorie consumption.
+* Sleep Improvement: To enhance sleep quality, Bellabeat should utilize app notifications to remind users of bedtime, encouraging healthy sleep routines.
+* Utilize Peak Activity Times: Recognizing that the majority of physical activity occurs between 5 pm and 7 pm, the Bellabeat app can leverage this window to send reminders and motivate users to engage in physical activities like jogging or walking after their workday.
+* Reducing Sedentary Time: As a suggestion, the Bellabeat app can advise users looking to improve their sleep to reduce sedentary behavior, emphasizing the link between physical activity and sleep quality.
